@@ -1,4 +1,7 @@
 # EСG-Ваsеd Нumаn Diseаsе Rесоgnitiоn Systеm
+## 🔗 Live Demo
+
+You can test the application at: [https://ecgreco.streamlit.app/#recognition-of-diseases-by-ecg](https://ecgreco.streamlit.app/#recognition-of-diseases-by-ecg)
 
 ## Overview
 
