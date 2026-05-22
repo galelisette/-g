@@ -9,7 +9,6 @@ st.set_page_config(page_title="ECG Disease Recognition", layout="wide")
 st.write("""# Recognition of diseases by ECG
 **Based on the works of Gale Lisette**""")
 
-# Функция для проверки существования файлов моделей
 def check_model_files():
     required_files = [
         'Gr_Boost_ECG_healthy.pkl',
@@ -27,7 +26,6 @@ def check_model_files():
     
     return missing_files
 
-# Проверяем наличие файлов моделей
 missing_files = check_model_files()
 if missing_files:
     st.warning(f"Отсутствуют файлы моделей: {', '.join(missing_files)}")
@@ -37,11 +35,10 @@ uploaded_file = st.file_uploader("Select ECG file *.csv", type="csv")
 
 if uploaded_file is not None:
     try:
-        # Пробуем разные разделители
         try:
             df_ecg = pd.read_csv(uploaded_file, sep=";")
         except:
-            uploaded_file.seek(0)  # Возвращаемся к началу файла
+            uploaded_file.seek(0)  
             try:
                 df_ecg = pd.read_csv(uploaded_file, sep=",")
             except:
@@ -53,25 +50,21 @@ if uploaded_file is not None:
         st.write(df_ecg.head())
         st.write("Столбцы в файле:", list(df_ecg.columns))
         
-        # Проверяем наличие необходимых столбцов
         if 'mV' not in df_ecg.columns:
             st.error("CSV файл должен содержать столбец 'mV'")
             st.write("Доступные столбцы:", list(df_ecg.columns))
             st.stop()
             
         if 'Seconds' not in df_ecg.columns:
-            # Попробуем создать столбец Seconds, если его нет
             st.warning("Столбец 'Seconds' не найден. Создаем на основе индекса...")
-            df_ecg['Seconds'] = df_ecg.index * 0.001  # предполагаем 1000 Hz
+            df_ecg['Seconds'] = df_ecg.index * 0.001  
         
-        # Убираем NaN значения
         df_ecg = df_ecg.dropna(subset=['mV'])
         
         if len(df_ecg) < 100:
             st.error("Недостаточно данных для анализа (менее 100 точек)")
             st.stop()
 
-        # Отображаем данные
         col1, col2 = st.columns([1, 3])
         with col1:
             st.subheader("Data of ECG")
@@ -80,14 +73,12 @@ if uploaded_file is not None:
             
         with col2:
             st.subheader("Chart of ECG")
-            # Ограничиваем количество точек для отображения
             max_points = min(3000, len(df_ecg))
             chart_data = df_ecg.iloc[:max_points]['mV'].reset_index(drop=True)
             st.line_chart(chart_data, use_container_width=True)
         
         st.write('Analyzing ECG...')
         
-        # Creating a cutoff threshold (mean curve, mV)
         last_point = len(df_ecg)
         vol_of_mean = max(1, int(last_point//330+1))
         last_mean_point = max(0, int(last_point-vol_of_mean))
@@ -99,11 +90,9 @@ if uploaded_file is not None:
         shift = 0.3
         last_threshold = last_mean + shift
         
-        # Инициализируем столбец Threshold
-        df_ecg = df_ecg.copy()  # Избегаем SettingWithCopyWarning
+        df_ecg = df_ecg.copy() 
         df_ecg['Threshold'] = 0.0
 
-        # Создаем пороговые значения
         st.write('Calculating thresholds...')
         progress_bar = st.progress(0)
         
@@ -115,15 +104,15 @@ if uploaded_file is not None:
                 threshold_val = df_ecg.iloc[start_idx:end_idx]['mV'].mean() + shift
                 df_ecg.iloc[i, df_ecg.columns.get_loc('Threshold')] = threshold_val
             
-            if i % 100 == 0:  # Обновляем прогресс каждые 100 итераций
+            if i % 100 == 0: 
                 progress = min(100, int(100 * (i + 1) / (last_mean_point + 1)))
                 progress_bar.progress(progress)
         
-        # Заполняем оставшиеся значения
+      
         df_ecg.iloc[last_mean_point:, df_ecg.columns.get_loc('Threshold')] = last_threshold
         progress_bar.progress(100)
 
-        # Search for amplitude
+    
         st.write('Finding amplitude peaks...')
         amplitude = []
         second_of_amplitude = []
@@ -141,13 +130,12 @@ if uploaded_file is not None:
                     amplitude.append(mv_current)
                     second_of_amplitude.append(df_ecg.iloc[i]['Seconds'])
             
-            if i % 1000 == 0:  # Обновляем прогресс каждые 1000 итераций
+            if i % 1000 == 0:  
                 progress = min(100, int(100 * i / (last_point - 2)))
                 progress_bar.progress(progress)
         
         progress_bar.progress(100)
 
-        # Ограничиваем количество пиков
         max_peaks = 600
         if len(amplitude) > max_peaks:
             amplitude = amplitude[:max_peaks]
@@ -155,12 +143,10 @@ if uploaded_file is not None:
 
         st.write(f'Found {len(amplitude)} amplitude peaks')
 
-        # Проверяем, что есть достаточно данных для анализа
         if len(amplitude) < 5:
             st.error("Недостаточно пиков для анализа. Попробуйте другой файл ECG или проверьте качество сигнала.")
             st.stop()
 
-        # Calculation of intervals and phase
         st.write('Calculating intervals and phases...')
         interval = []
         phase = []
@@ -170,13 +156,12 @@ if uploaded_file is not None:
             interval.append(interval_val)
         
         for i in range(len(amplitude)-1):
-            if i < len(interval) and interval[i] != 0:  # Защита от деления на ноль
+            if i < len(interval) and interval[i] != 0:  
                 phase_val = math.atan(amplitude[i] / interval[i])
                 phase.append(phase_val)
             else:
                 phase.append(0.0)
 
-        # Проверяем согласованность данных
         min_length = min(len(interval), len(amplitude)-1, len(phase))
         interval = interval[:min_length]
         phase = phase[:min_length]
@@ -185,7 +170,6 @@ if uploaded_file is not None:
             st.error("Недостаточно данных для создания кодограммы.")
             st.stop()
 
-        # Calculation of delta values
         st.write('Calculating deltas...')
         delta_interval = []
         delta_amplitude = []
@@ -200,7 +184,6 @@ if uploaded_file is not None:
             st.error("Недостаточно данных для создания кодограммы.")
             st.stop()
 
-        # Create codogram
         st.write('Creating codogram...')
         cod = []
         for i in range(len(delta_interval)):
@@ -221,14 +204,12 @@ if uploaded_file is not None:
             elif di < 0 and da < 0 and dp < 0:
                 cod.append('F')
 
-        # Создаем триграммы
         codogram = []
         for i in range(len(cod)-2):
             codogram.append(cod[i] + cod[i+1] + cod[i+2])
 
         st.write(f'Created {len(codogram)} codogram elements')
 
-        # Создаем список всех возможных триграмм
         letters = ['A', 'B', 'C', 'D', 'E', 'F']
         cod_sample = []
         for i in letters:
@@ -236,7 +217,6 @@ if uploaded_file is not None:
                 for k in letters:
                     cod_sample.append(i + j + k)
 
-        # Подсчитываем частоты
         number_of_features = []
         for pattern in cod_sample:
             count = codogram.count(pattern)
@@ -244,14 +224,11 @@ if uploaded_file is not None:
 
         st.write(f'Feature vector created with {len(number_of_features)} elements')
 
-        # Diagnostics
-        if not missing_files:  # Только если все файлы моделей есть
+        if not missing_files:  
             try:
-                # Создаем DataFrame с правильными индексами столбцов
                 feature_columns = list(range(len(number_of_features)))
                 x = pd.DataFrame([number_of_features], columns=feature_columns)
 
-                # Загружаем и используем модели
                 with open('Gr_Boost_ECG_healthy.pkl', 'rb') as f:
                     model_of_health = pickle.load(f)
                 
@@ -264,7 +241,6 @@ if uploaded_file is not None:
                 else:
                     st.warning('🔍 Analyzing for potential diseases...')
                     
-                    # Загружаем остальные модели
                     models = {
                         'vegetovascular dystonia': 'Gr_Boost_ECG_veget_dyst.pkl',
                         'coronary heart disease': 'Gr_Boost_ECG_ischemia.pkl', 
@@ -285,7 +261,6 @@ if uploaded_file is not None:
                         except Exception as e:
                             st.warning(f"Could not load model for {disease}: {str(e)}")
                     
-                    # Отображаем результаты
                     for disease, probability in results.items():
                         if probability > 50:
                             st.error(f'⚠️ **{disease.title()}**: {probability}%')
@@ -313,7 +288,6 @@ if uploaded_file is not None:
         st.write("- File encoding (try UTF-8)")
         st.write("- Data quality and completeness")
         
-        # Показываем дополнительную информацию об ошибке
         import traceback
         with st.expander("Technical details"):
             st.code(traceback.format_exc())
@@ -321,7 +295,6 @@ if uploaded_file is not None:
 else:
     st.info("👆 Please upload an ECG CSV file to begin analysis")
     
-    # Показываем пример формата данных
     st.subheader("Expected file format:")
     example_data = pd.DataFrame({
         'mV': [0.1, 0.15, 0.2, 0.18, 0.12],
